@@ -101,8 +101,20 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
     def avatar_url(self):
         if self.avatar:
             return self.avatar.url
-        initials = f'{self.first_name[0]}{self.last_name[0]}'.upper() if self.first_name else '?'
-        return f'https://ui-avatars.com/api/?name={initials}&background=6366f1&color=fff&size=128'
+        import base64
+        initials = (
+            f'{self.first_name[0]}{self.last_name[0]}'.upper()
+            if self.first_name else '?'
+        )
+        svg = (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128">'
+            '<rect width="128" height="128" fill="#6366f1" rx="64"/>'
+            f'<text x="64" y="64" dominant-baseline="central" text-anchor="middle" '
+            f'fill="white" font-size="52" font-family="sans-serif">{initials}</text>'
+            '</svg>'
+        )
+        encoded = base64.b64encode(svg.encode()).decode()
+        return f'data:image/svg+xml;base64,{encoded}'
 
     def get_primary_role(self):
         from apps.core.permissions import ROLE_HIERARCHY

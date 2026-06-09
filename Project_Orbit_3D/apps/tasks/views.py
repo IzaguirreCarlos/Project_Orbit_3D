@@ -3,6 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.db.models import Q
 
 from .models import Task, Comment, Attachment, TaskHistory
 from .serializers import (
@@ -22,7 +23,7 @@ class TaskListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         user = self.request.user
         return Task.objects.filter(
-            project__assignments__user=user
+            Q(project__assignments__user=user) | Q(project__owner=user)
         ).select_related('assignee', 'creator', 'project').distinct()
 
 
@@ -31,8 +32,9 @@ class TaskDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        user = self.request.user
         return Task.objects.filter(
-            project__assignments__user=self.request.user
+            Q(project__assignments__user=user) | Q(project__owner=user)
         ).distinct()
 
     def perform_update(self, serializer):
@@ -107,17 +109,29 @@ class CommentListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         return Comment.objects.filter(
-            task_id=self.kwargs['task_pk']
-        ).select_related('author')
+            task_id=self.kwargs['task_pk'],
+            task__project__assignments__user=self.request.user,
+        ).select_related('author').distinct()
 
     def perform_create(self, serializer):
-        serializer.save(task_id=self.kwargs['task_pk'])
+        task_qs = Task.objects.filter(
+            id=self.kwargs['task_pk'],
+            project__assignments__user=self.request.user,
+        ).distinct()
+        if not task_qs.exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied
+        serializer.save(task_id=self.kwargs['task_pk'], author=self.request.user)
 
 
 class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CommentSerializer
     permission_classes = [permissions.IsAuthenticated]
-    queryset = Comment.objects.all()
+
+    def get_queryset(self):
+        return Comment.objects.filter(
+            task__project__assignments__user=self.request.user,
+        ).distinct()
 
     def perform_update(self, serializer):
         serializer.save(is_edited=True)

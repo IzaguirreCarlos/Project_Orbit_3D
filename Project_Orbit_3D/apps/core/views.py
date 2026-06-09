@@ -1,4 +1,5 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db.models import Q
 from django.views.generic import TemplateView
 
 
@@ -12,7 +13,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
 
         user = self.request.user
         ctx['active_projects'] = Project.objects.filter(
-            assignments__user=user,
+            Q(assignments__user=user) | Q(owner=user),
             status__in=['planning', 'active', 'in_review']
         ).distinct()[:6]
         ctx['pending_tasks'] = Task.objects.filter(
@@ -33,7 +34,7 @@ class Dashboard3DView(LoginRequiredMixin, TemplateView):
         from apps.projects.models import Project
         import json
         projects = Project.objects.filter(
-            assignments__user=self.request.user
+            Q(assignments__user=self.request.user) | Q(owner=self.request.user)
         ).distinct().values(
             'id', 'name', 'status', 'progress', 'theme_color', 'priority'
         )

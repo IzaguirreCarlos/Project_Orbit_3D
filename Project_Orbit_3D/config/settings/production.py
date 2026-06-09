@@ -1,5 +1,5 @@
 """
-ProjectForge 3D — Production Settings
+Project_Orbit_3D — Production Settings
 """
 from .base import *  # noqa
 

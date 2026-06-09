@@ -1,5 +1,5 @@
 """
-ProjectForge 3D — Base Settings
+Project_Orbit_3D — Base Settings
 Shared across all environments.
 """
 import os

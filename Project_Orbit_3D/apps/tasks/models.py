@@ -66,6 +66,16 @@ class Task(BaseModel):
     def __str__(self):
         return self.title
 
+    def save(self, *args, **kwargs):
+        if self.pk:
+            prev_assignee = (
+                Task.objects.filter(pk=self.pk)
+                .values_list('assignee_id', flat=True)
+                .first()
+            )
+            self._assignee_changed = prev_assignee != self.assignee_id
+        super().save(*args, **kwargs)
+
     @property
     def is_overdue(self):
         from django.utils import timezone

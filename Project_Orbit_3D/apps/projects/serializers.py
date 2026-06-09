@@ -51,9 +51,13 @@ class ProjectSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'progress', 'created_at', 'updated_at']
 
     def get_tasks_count(self, obj):
+        if hasattr(obj, 'tasks_count'):
+            return obj.tasks_count
         return obj.tasks.count()
 
     def get_members_count(self, obj):
+        if hasattr(obj, 'members_count'):
+            return obj.members_count
         return obj.assignments.count()
 
     def create(self, validated_data):
@@ -74,7 +78,11 @@ class ProjectListSerializer(serializers.ModelSerializer):
         ]
 
     def get_tasks_count(self, obj):
+        if hasattr(obj, 'tasks_count'):
+            return obj.tasks_count
         return obj.tasks.count()
 
     def get_members_count(self, obj):
+        if hasattr(obj, 'members_count'):
+            return obj.members_count
         return obj.assignments.count()

@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.db.models import Count
 
 from .models import Project, Assignment, Sprint, Label
 from .serializers import (
@@ -28,11 +29,13 @@ class ProjectListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser:
-            return Project.objects.all().prefetch_related('assignments', 'labels')
-        return Project.objects.filter(
-            assignments__user=user
-        ).distinct().prefetch_related('assignments', 'labels')
+        qs = Project.objects.all() if user.is_superuser else (
+            Project.objects.filter(assignments__user=user).distinct()
+        )
+        return qs.annotate(
+            tasks_count=Count('tasks', distinct=True),
+            members_count=Count('assignments', distinct=True),
+        ).prefetch_related('assignments', 'labels')
 
 
 class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -41,9 +44,13 @@ class ProjectDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_superuser:
-            return Project.objects.all()
-        return Project.objects.filter(assignments__user=user).distinct()
+        qs = Project.objects.all() if user.is_superuser else (
+            Project.objects.filter(assignments__user=user).distinct()
+        )
+        return qs.annotate(
+            tasks_count=Count('tasks', distinct=True),
+            members_count=Count('assignments', distinct=True),
+        )
 
 
 class AssignmentListCreateView(generics.ListCreateAPIView):

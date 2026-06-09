@@ -69,6 +69,12 @@ class UserDetailView(generics.RetrieveUpdateAPIView):
     permission_classes = [permissions.IsAuthenticated]
     queryset = User.objects.filter(is_active=True).prefetch_related('roles')
 
+    def check_object_permissions(self, request, obj):
+        super().check_object_permissions(request, obj)
+        if request.method not in permissions.SAFE_METHODS and obj != request.user and not request.user.is_staff:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied
+
 
 class RoleListView(generics.ListAPIView):
     queryset = Role.objects.all()

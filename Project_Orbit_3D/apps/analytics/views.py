@@ -5,7 +5,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
-from django.db.models import Count, Avg, Q
+from django.db.models import Count, Avg, Q, Sum
 from datetime import timedelta
 
 
@@ -17,7 +17,9 @@ def executive_dashboard(request):
     from apps.tasks.models import Task
 
     user = request.user
-    projects = Project.objects.filter(assignments__user=user).distinct()
+    projects = Project.objects.filter(
+        Q(assignments__user=user) | Q(owner=user)
+    ).distinct()
     tasks = Task.objects.filter(project__in=projects)
     now = timezone.now()
 
@@ -50,7 +52,9 @@ def weekly_productivity(request):
     from apps.projects.models import Project
 
     user = request.user
-    projects = Project.objects.filter(assignments__user=user).distinct()
+    projects = Project.objects.filter(
+        Q(assignments__user=user) | Q(owner=user)
+    ).distinct()
     today = timezone.now().date()
     data = []
     for i in range(6, -1, -1):
@@ -72,17 +76,28 @@ def project_burndown(request, project_pk):
     from apps.tasks.models import Task
 
     try:
-        project = Project.objects.get(pk=project_pk)
-        sprint = Sprint.objects.filter(project=project, status='active').first()
+        project = Project.objects.get(
+            pk=project_pk
+        )
     except Project.DoesNotExist:
         return Response({'error': 'Not found'}, status=404)
+
+    has_access = project.assignments.filter(user=request.user).exists() or project.owner == request.user
+    if not has_access:
+        return Response({'error': 'Not found'}, status=404)
+
+    sprint = Sprint.objects.filter(project=project, status='active').first()
 
     if not sprint:
         return Response({'error': 'No active sprint'}, status=404)
 
-    total_points = Task.objects.filter(sprint=sprint).aggregate(
-        total=Count('id')
-    )['total']
+    agg = Task.objects.filter(sprint=sprint).aggregate(
+        story=Sum('story_points'),
+        count=Count('id'),
+    )
+    # Use story points when at least one task has them set, otherwise fall back to task count
+    uses_story_points = bool(agg['story'])
+    total_points = agg['story'] if uses_story_points else (agg['count'] or 0)
 
     days = (sprint.end_date - sprint.start_date).days + 1
     ideal = [
@@ -97,7 +112,8 @@ def project_burndown(request, project_pk):
         'sprint': sprint.name,
         'start_date': str(sprint.start_date),
         'end_date': str(sprint.end_date),
-        'total_tasks': total_points,
+        'total_points': total_points,
+        'uses_story_points': uses_story_points,
         'ideal_burndown': ideal,
     })
 
@@ -110,7 +126,9 @@ def team_velocity(request):
     from apps.projects.models import Project
 
     user = request.user
-    projects = Project.objects.filter(assignments__user=user).distinct()
+    projects = Project.objects.filter(
+        Q(assignments__user=user) | Q(owner=user)
+    ).distinct()
     week_ago = timezone.now() - timedelta(days=7)
 
     velocity = (
@@ -134,7 +152,9 @@ def tasks_by_status(request):
     from apps.tasks.models import Task
     from apps.projects.models import Project
 
-    projects = Project.objects.filter(assignments__user=request.user).distinct()
+    projects = Project.objects.filter(
+        Q(assignments__user=request.user) | Q(owner=request.user)
+    ).distinct()
     data = (
         Task.objects.filter(project__in=projects)
         .values('status')
