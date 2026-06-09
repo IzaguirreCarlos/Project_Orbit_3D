@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+{% block title %}Centro de Control 3D{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  #canvas-3d { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .project-tooltip {
+    position: absolute; pointer-events: none; z-index: 50;
+    background: rgba(15,15,26,0.95); backdrop-filter: blur(20px);
+    border: 1px solid rgba(99,102,241,0.4); border-radius: 12px;
+    padding: 12px 16px; min-width: 180px; transform: translate(-50%, -110%);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="relative h-[calc(100vh-57px)] overflow-hidden">
+
+  <!-- 3D Canvas -->
+  <canvas id="canvas-3d"></canvas>
+
+  <!-- HUD Overlay -->
+  <div class="absolute inset-0 pointer-events-none">
+
+    <!-- Title -->
+    <div class="absolute top-6 left-6 pointer-events-auto">
+      <h1 class="text-2xl font-bold gradient-text">Centro de Control 3D</h1>
+      <p class="text-white/40 text-sm">Tus proyectos en el universo</p>
+    </div>
+
+    <!-- Legend -->
+    <div class="absolute top-6 right-6 pointer-events-auto glass rounded-2xl p-4 min-w-52">
+      <p class="text-xs font-semibold text-white/50 uppercase mb-3">Leyenda</p>
+      <div class="space-y-2 text-sm">
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-400 inline-block"></span><span class="text-white/70">Activo</span></div>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-indigo-400 inline-block"></span><span class="text-white/70">Planning</span></div>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-400 inline-block"></span><span class="text-white/70">En Revisión</span></div>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-teal-400 inline-block"></span><span class="text-white/70">Completado</span></div>
+        <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-400 inline-block"></span><span class="text-white/70">Cancelado</span></div>
+      </div>
+      <hr class="border-white/10 my-3">
+      <p class="text-xs text-white/30">Tamaño = progreso</p>
+      <p class="text-xs text-white/30">Clic para detalles</p>
+    </div>
+
+    <!-- Controls hint -->
+    <div class="absolute bottom-6 left-6 pointer-events-auto text-xs text-white/30 space-y-1">
+      <p>🖱 Clic + arrastrar para rotar</p>
+      <p>🔍 Scroll para zoom</p>
+    </div>
+
+    <!-- Project count -->
+    <div class="absolute bottom-6 right-6 pointer-events-auto glass rounded-xl px-4 py-3">
+      <p class="text-xs text-white/40">Proyectos en órbita</p>
+      <p class="text-2xl font-bold gradient-text" id="planet-count">0</p>
+    </div>
+  </div>
+
+  <!-- Tooltip -->
+  <div id="project-tooltip" class="project-tooltip hidden">
+    <p class="font-semibold text-white text-sm" id="tooltip-name"></p>
+    <p class="text-xs text-white/50 mt-1" id="tooltip-status"></p>
+    <div class="mt-2">
+      <div class="flex justify-between text-xs text-white/50 mb-1">
+        <span>Progreso</span><span id="tooltip-progress"></span>
+      </div>
+      <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
+        <div id="tooltip-bar" class="h-full rounded-full" style="background:linear-gradient(90deg,#6366f1,#8b5cf6); transition: width 0.3s;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const PROJECTS = {{ projects_json|safe }};
+
+// ─── Scene Setup ─────────────────────────────────────────
+const canvas = document.getElementById('canvas-3d');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(canvas.offsetWidth, canvas.offsetHeight);
+renderer.shadowMap.enabled = true;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, canvas.offsetWidth / canvas.offsetHeight, 0.1, 1000);
+camera.position.set(0, 5, 22);
+
+// ─── Lighting ────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x404060, 0.8));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+dirLight.position.set(10, 20, 15);
+scene.add(dirLight);
+
+// Purple point light for drama
+const pLight = new THREE.PointLight(0x6366f1, 3, 50);
+pLight.position.set(-10, 5, 5);
+scene.add(pLight);
+
+// Cyan accent
+const cLight = new THREE.PointLight(0x06b6d4, 2, 40);
+cLight.position.set(10, -5, 10);
+scene.add(cLight);
+
+// ─── Starfield ───────────────────────────────────────────
+const starGeo = new THREE.BufferGeometry();
+const starPositions = [];
+for (let i = 0; i < 3000; i++) {
+  starPositions.push((Math.random() - 0.5) * 400, (Math.random() - 0.5) * 400, (Math.random() - 0.5) * 400);
+}
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
+scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, transparent: true, opacity: 0.7 })));
+
+// ─── Particle system ─────────────────────────────────────
+const partGeo = new THREE.BufferGeometry();
+const partPos = [];
+for (let i = 0; i < 500; i++) {
+  const angle = (i / 500) * Math.PI * 2;
+  const r = 12 + Math.sin(i * 0.3) * 4;
+  partPos.push(Math.cos(angle) * r, (Math.random() - 0.5) * 8, Math.sin(angle) * r);
+}
+partGeo.setAttribute('position', new THREE.Float32BufferAttribute(partPos, 3));
+const particles = new THREE.Points(partGeo, new THREE.PointsMaterial({ color: 0x6366f1, size: 0.08, transparent: true, opacity: 0.5 }));
+scene.add(particles);
+
+// ─── Status colors ───────────────────────────────────────
+const STATUS_COLORS = {
+  active:    0x22c55e,
+  planning:  0x6366f1,
+  in_review: 0xf59e0b,
+  testing:   0xa78bfa,
+  completed: 0x14b8a6,
+  cancelled: 0xef4444,
+};
+
+// ─── Planet builder ──────────────────────────────────────
+const planets = [];
+const orbitRadius = 8;
+const PROJECTS_DATA = PROJECTS;
+document.getElementById('planet-count').textContent = PROJECTS_DATA.length;
+
+PROJECTS_DATA.forEach((proj, i) => {
+  const angle = (i / PROJECTS_DATA.length) * Math.PI * 2;
+  const size = 0.5 + (proj.progress / 100) * 1.2;
+  const color = STATUS_COLORS[proj.status] || 0x6366f1;
+
+  // Orbit ring
+  const orbitCurve = new THREE.EllipseCurve(0, 0, orbitRadius + i * 0.8, orbitRadius + i * 0.8, 0, Math.PI * 2, false, 0);
+  const orbitPts = orbitCurve.getPoints(80).map(p => new THREE.Vector3(p.x, 0, p.y));
+  const orbitGeo = new THREE.BufferGeometry().setFromPoints(orbitPts);
+  const orbitMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.15 });
+  scene.add(new THREE.Line(orbitGeo, orbitMat));
+
+  // Planet sphere
+  const geo = new THREE.SphereGeometry(size, 32, 32);
+  const mat = new THREE.MeshPhongMaterial({
+    color,
+    shininess: 100,
+    emissive: color,
+    emissiveIntensity: 0.15,
+  });
+  const planet = new THREE.Mesh(geo, mat);
+  const r = orbitRadius + i * 0.8;
+  planet.position.set(Math.cos(angle) * r, Math.sin(i * 0.5) * 1.5, Math.sin(angle) * r);
+
+  // Progress glow ring
+  if (proj.progress > 0) {
+    const ringGeo = new THREE.RingGeometry(size + 0.15, size + 0.25, 32);
+    const ringMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: proj.progress / 200, side: THREE.DoubleSide });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI / 2;
+    planet.add(ring);
+  }
+
+  planet.userData = { project: proj, orbitRadius: r, angle, speed: 0.002 + Math.random() * 0.003 };
+  scene.add(planet);
+  planets.push(planet);
+
+  // Connecting line (faint)
+  if (i > 0) {
+    const prev = planets[i - 1];
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([planet.position.clone(), prev.position.clone()]);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.08 });
+    scene.add(new THREE.Line(lineGeo, lineMat));
+  }
+});
+
+// ─── Mouse / Orbit Controls (manual) ─────────────────────
+let isDragging = false, prevMouse = { x: 0, y: 0 };
+let rotX = 0, rotY = 0, zoom = 22;
+
+canvas.addEventListener('mousedown', e => { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY }; });
+canvas.addEventListener('mouseup', () => { isDragging = false; });
+canvas.addEventListener('mousemove', e => {
+  if (isDragging) {
+    rotY += (e.clientX - prevMouse.x) * 0.005;
+    rotX += (e.clientY - prevMouse.y) * 0.005;
+    prevMouse = { x: e.clientX, y: e.clientY };
+  }
+  // Tooltip
+  const rect = canvas.getBoundingClientRect();
+  const mouse = new THREE.Vector2(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1
+  );
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(planets);
+  const tooltip = document.getElementById('project-tooltip');
+  if (hits.length > 0) {
+    const p = hits[0].object.userData.project;
+    tooltip.style.display = 'block';
+    tooltip.style.left = e.clientX + 'px';
+    tooltip.style.top = e.clientY + 'px';
+    document.getElementById('tooltip-name').textContent = p.name;
+    document.getElementById('tooltip-status').textContent = p.status.toUpperCase();
+    document.getElementById('tooltip-progress').textContent = p.progress + '%';
+    document.getElementById('tooltip-bar').style.width = p.progress + '%';
+    canvas.style.cursor = 'pointer';
+  } else {
+    tooltip.style.display = 'none';
+    canvas.style.cursor = 'grab';
+  }
+});
+
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const mouse = new THREE.Vector2(
+    ((e.clientX - rect.left) / rect.width) * 2 - 1,
+    -((e.clientY - rect.top) / rect.height) * 2 + 1
+  );
+  const raycaster = new THREE.Raycaster();
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(planets);
+  if (hits.length > 0) {
+    const p = hits[0].object.userData.project;
+    window.location.href = `/projects/${p.id}/`;
+  }
+});
+
+canvas.addEventListener('wheel', e => {
+  zoom = Math.min(50, Math.max(10, zoom + e.deltaY * 0.05));
+});
+
+// ─── Animate ──────────────────────────────────────────────
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+
+  // Orbit planets
+  planets.forEach(p => {
+    p.userData.angle += p.userData.speed;
+    const r = p.userData.orbitRadius;
+    p.position.x = Math.cos(p.userData.angle) * r;
+    p.position.z = Math.sin(p.userData.angle) * r;
+    p.rotation.y += 0.005;
+  });
+
+  // Rotate particles
+  particles.rotation.y = t * 0.05;
+
+  // Camera orbit from mouse
+  const targetX = Math.sin(rotY) * zoom;
+  const targetZ = Math.cos(rotY) * zoom;
+  const targetY = rotX * 10 + 5;
+  camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), 0.05);
+  camera.lookAt(0, 0, 0);
+
+  // Pulsing light
+  pLight.intensity = 2 + Math.sin(t * 2) * 0.5;
+
+  renderer.render(scene, camera);
+}
+animate();
+
+// ─── Resize ──────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+});
+</script>
+{% endblock %}

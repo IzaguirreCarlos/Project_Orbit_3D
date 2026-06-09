@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="projectDetail('{{ project.id }}')" x-init="init()">
+  <!-- Header -->
+  <div class="animate-in flex flex-wrap items-start justify-between gap-4 mb-6">
+    <div class="flex items-center gap-4">
+      <a href="{% url 'projects:list' %}" class="text-white/40 hover:text-white transition-all">
+        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+      </a>
+      <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl"
+           style="background: {{ project.theme_color }}22; border: 1px solid {{ project.theme_color }}44;">🚀</div>
+      <div>
+        <h1 class="text-xl font-bold text-white">{{ project.name }}</h1>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="text-xs px-2 py-0.5 rounded-full status-{{ project.status }}">
+            {{ project.get_status_display }}
+          </span>
+          <span class="text-xs text-white/40">{{ project.client }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="{% url 'projects:kanban' project.id %}"
+         class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium glass border border-white/10 text-white hover:border-indigo-500/50 transition-all">
+        <i data-lucide="kanban-square" class="w-4 h-4"></i>Kanban
+      </a>
+      <a href="{% url 'projects:timeline' project.id %}"
+         class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium glass border border-white/10 text-white hover:border-indigo-500/50 transition-all">
+        <i data-lucide="gantt-chart" class="w-4 h-4"></i>Timeline
+      </a>
+    </div>
+  </div>
+
+  <!-- Stats Row -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 animate-in">
+    <div class="stat-card">
+      <p class="text-xs text-white/40 mb-2">Progreso General</p>
+      <div class="flex items-center gap-2">
+        <div class="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+          <div class="h-full rounded-full" style="width: {{ project.progress }}%; background: linear-gradient(90deg,#6366f1,#8b5cf6);"></div>
+        </div>
+        <span class="text-lg font-bold text-white">{{ project.progress }}%</span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <p class="text-xs text-white/40 mb-1">Tareas</p>
+      <p class="text-2xl font-bold gradient-text" x-text="stats.tasks_total || '—'"></p>
+    </div>
+    <div class="stat-card">
+      <p class="text-xs text-white/40 mb-1">Miembros</p>
+      <p class="text-2xl font-bold gradient-text" x-text="stats.members || '—'"></p>
+    </div>
+    <div class="stat-card">
+      <p class="text-xs text-white/40 mb-1">Presupuesto</p>
+      <p class="text-lg font-bold text-white">
+        {% if project.budget %}${{ project.budget|floatformat:0 }}{% else %}—{% endif %}
+      </p>
+    </div>
+  </div>
+
+  <!-- Tasks by Status mini Kanban preview -->
+  <div class="grid grid-cols-3 md:grid-cols-6 gap-3 mb-6 animate-in">
+    <template x-for="[status, tasks] in Object.entries(tasksByStatus)" :key="status">
+      <div class="glass rounded-xl p-3 text-center">
+        <p class="text-xs text-white/40 mb-1" x-text="status.replace('_',' ')"></p>
+        <p class="text-xl font-bold text-white" x-text="tasks.length"></p>
+      </div>
+    </template>
+  </div>
+
+  <!-- Description + Members -->
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-in">
+    <div class="xl:col-span-2 glass rounded-2xl p-6">
+      <h2 class="font-semibold text-white mb-3">Descripción</h2>
+      <p class="text-white/60 text-sm leading-relaxed">{{ project.description|default:"Sin descripción." }}</p>
+      {% if project.repository_url %}
+      <a href="{{ project.repository_url }}" target="_blank"
+         class="inline-flex items-center gap-2 mt-4 text-indigo-400 hover:text-indigo-300 text-sm">
+        <i data-lucide="github" class="w-4 h-4"></i>Repositorio
+      </a>
+      {% endif %}
+    </div>
+    <div class="glass rounded-2xl p-6">
+      <h2 class="font-semibold text-white mb-4">Equipo</h2>
+      <div id="members-list" class="space-y-3">
+        <div class="text-center py-4"><div class="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function projectDetail(projectId) {
+  return {
+    stats: {}, tasksByStatus: {}, loading: true,
+    async init() {
+      const [statsRes, kanbanRes, membersRes] = await Promise.all([
+        fetch(`/api/v1/projects/${projectId}/stats/`),
+        fetch(`/api/v1/tasks/kanban/${projectId}/`),
+        fetch(`/api/v1/projects/${projectId}/`),
+      ]);
+      this.stats = await statsRes.json();
+      this.tasksByStatus = await kanbanRes.json();
+      const project = await membersRes.json();
+      this.renderMembers(project.assignments || []);
+    },
+    renderMembers(assignments) {
+      const el = document.getElementById('members-list');
+      if (!assignments.length) { el.innerHTML = '<p class="text-white/30 text-sm">Sin miembros asignados</p>'; return; }
+      el.innerHTML = assignments.map(a => `
+        <div class="flex items-center gap-3">
+          <img src="${a.user.avatar_url}" alt="" class="w-8 h-8 rounded-full ring-1 ring-indigo-500/30">
+          <div>
+            <p class="text-sm font-medium text-white">${a.user.full_name}</p>
+            <p class="text-xs text-white/40">${a.role?.name || '—'}</p>
+          </div>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+  };
+}
+</script>
+{% endblock %}

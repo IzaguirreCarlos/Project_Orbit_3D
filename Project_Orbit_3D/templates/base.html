@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es" class="dark"
+  x-data="{ darkMode: true, sidebarOpen: true }"
+  x-init="darkMode = localStorage.getItem('darkMode') !== 'false'; $el.classList.toggle('dark', darkMode)"
+  :class="darkMode ? 'dark' : ''">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}ProjectForge 3D{% endblock %} — ProjectForge 3D</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81' },
+            surface: { DEFAULT:'#0f0f1a', 50:'#1a1a2e', 100:'#16213e', 200:'#1f2347', 300:'#252850' },
+          },
+          fontFamily: { sans: ['Inter','system-ui','sans-serif'] },
+          animation: {
+            'float': 'float 6s ease-in-out infinite',
+            'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
+            'slide-up': 'slide-up 0.3s ease-out',
+          },
+          keyframes: {
+            float: { '0%,100%': {transform:'translateY(0)'}, '50%': {transform:'translateY(-10px)'} },
+            'pulse-glow': { '0%,100%': {boxShadow:'0 0 20px rgba(99,102,241,0.3)'}, '50%': {boxShadow:'0 0 40px rgba(99,102,241,0.8)'} },
+            'slide-up': { from: {opacity:'0', transform:'translateY(8px)'}, to: {opacity:'1', transform:'translateY(0)'} },
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Alpine.js -->
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- GSAP -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  {% block extra_head %}{% endblock %}
+
+  <style>
+    /* ─── Tokens: Light (default) ───────────────────── */
+    :root {
+      --primary: #6366f1;
+      --primary-glow: rgba(99,102,241,0.4);
+      --surface-1: #f8fafc;
+      --surface-2: #f1f5f9;
+      --surface-3: #e2e8f0;
+      --border: rgba(0,0,0,0.08);
+      --text-main: #1e293b;
+      --text-muted: rgba(30,41,59,0.5);
+      --sidebar-bg: rgba(248,250,252,0.97);
+      --header-bg: rgba(248,250,252,0.92);
+      --nav-color: rgba(30,41,59,0.65);
+      --nav-hover-bg: rgba(99,102,241,0.08);
+      --nav-hover-color: #1e293b;
+      --glass-bg: rgba(0,0,0,0.03);
+      --glass-border: rgba(0,0,0,0.08);
+      --glass-strong-bg: rgba(0,0,0,0.05);
+    }
+
+    /* ─── Tokens: Dark ──────────────────────────────── */
+    .dark {
+      --surface-1: #0f0f1a;
+      --surface-2: #1a1a2e;
+      --surface-3: #252850;
+      --border: rgba(255,255,255,0.08);
+      --text-main: #e2e8f0;
+      --text-muted: rgba(255,255,255,0.5);
+      --sidebar-bg: rgba(15,15,26,0.97);
+      --header-bg: rgba(15,15,26,0.92);
+      --nav-color: rgba(255,255,255,0.6);
+      --nav-hover-bg: rgba(99,102,241,0.15);
+      --nav-hover-color: #ffffff;
+      --glass-bg: rgba(255,255,255,0.04);
+      --glass-border: rgba(255,255,255,0.08);
+      --glass-strong-bg: rgba(255,255,255,0.08);
+    }
+
+    body {
+      background: var(--surface-1);
+      color: var(--text-main);
+      font-family: 'Inter', sans-serif;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    /* ─── Glassmorphism ────────────────────────────── */
+    .glass {
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+    }
+    .glass-strong {
+      background: var(--glass-strong-bg);
+      backdrop-filter: blur(30px);
+      border: 1px solid var(--glass-border);
+    }
+
+    /* ─── App shell surfaces ────────────────────────── */
+    .app-sidebar {
+      background: var(--sidebar-bg) !important;
+      border-color: var(--border) !important;
+      transition: background 0.3s ease, width 0.3s ease;
+    }
+    .app-header {
+      background: var(--header-bg) !important;
+      border-color: var(--border) !important;
+      transition: background 0.3s ease;
+    }
+
+    /* ─── Scrollbar ────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.4); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.7); }
+
+    /* ─── Sidebar ──────────────────────────────────── */
+    .sidebar { width: 260px; transition: width 0.3s ease; }
+    .sidebar.collapsed { width: 72px; }
+
+    /* ─── Cards ────────────────────────────────────── */
+    .stat-card {
+      background: linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(139,92,246,0.05) 100%);
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 16px;
+      padding: 24px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(99,102,241,0.2); }
+
+    /* ─── Priority Badges ──────────────────────────── */
+    .priority-low    { background: rgba( 34,197, 94,0.15); color: #16a34a; border: 1px solid rgba( 34,197, 94,0.3); }
+    .priority-medium { background: rgba(234,179,  8,0.15); color: #b45309; border: 1px solid rgba(234,179,  8,0.3); }
+    .priority-high   { background: rgba(249,115, 22,0.15); color: #c2410c; border: 1px solid rgba(249,115, 22,0.3); }
+    .priority-critical { background: rgba(239, 68, 68,0.15); color: #b91c1c; border: 1px solid rgba(239, 68, 68,0.3); }
+    .dark .priority-low    { color: #4ade80; }
+    .dark .priority-medium { color: #fbbf24; }
+    .dark .priority-high   { color: #fb923c; }
+    .dark .priority-critical { color: #f87171; }
+
+    /* ─── Status Badges ────────────────────────────── */
+    .status-planning   { background: rgba(99,102,241,0.15); color: #4338ca; }
+    .status-active     { background: rgba(34,197, 94,0.15); color: #15803d; }
+    .status-in_review  { background: rgba(234,179,  8,0.15); color: #92400e; }
+    .status-testing    { background: rgba(139, 92,246,0.15); color: #6d28d9; }
+    .status-completed  { background: rgba(20,184,166,0.15);  color: #0f766e; }
+    .status-cancelled  { background: rgba(239, 68, 68,0.15); color: #b91c1c; }
+    .dark .status-planning  { color: #818cf8; }
+    .dark .status-active    { color: #4ade80; }
+    .dark .status-in_review { color: #fbbf24; }
+    .dark .status-testing   { color: #a78bfa; }
+    .dark .status-completed { color: #2dd4bf; }
+    .dark .status-cancelled { color: #f87171; }
+
+    /* ─── Gradient Text ────────────────────────────── */
+    .gradient-text {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ─── Sidebar Nav Items ────────────────────────── */
+    .nav-item {
+      display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+      border-radius: 10px; color: var(--nav-color); text-decoration: none;
+      transition: all 0.2s; font-size: 0.875rem; font-weight: 500;
+    }
+    .nav-item:hover { background: var(--nav-hover-bg); color: var(--nav-hover-color); }
+    .nav-item.active { background: rgba(99,102,241,0.15); color: #6366f1; border-left: 3px solid #6366f1; }
+    .dark .nav-item.active { color: #818cf8; }
+
+    /* ─── Sidebar text & separators ────────────────── */
+    .sidebar-section-label { color: var(--text-muted); }
+    .sidebar-username { color: var(--text-main); }
+    .sidebar-usertitle { color: var(--text-muted); }
+    .sidebar-border { border-color: var(--border); }
+
+    /* ─── Topbar controls ──────────────────────────── */
+    .topbar-btn {
+      color: var(--nav-color);
+      transition: color 0.2s, background 0.2s;
+    }
+    .topbar-btn:hover { background: var(--nav-hover-bg); color: var(--nav-hover-color); }
+    .topbar-search {
+      background: var(--glass-bg);
+      border-color: var(--border);
+      color: var(--text-muted);
+    }
+
+    /* ─── Animations ───────────────────────────────── */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-in { animation: fadeInUp 0.4s ease forwards; }
+
+    /* ─── Toast ────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      min-width: 300px; padding: 16px 20px; border-radius: 12px;
+      animation: slide-up 0.3s ease;
+    }
+
+    /* ─── Light mode: invertir clases Tailwind dark-only ─── */
+    /* Texto blanco → texto oscuro */
+    html:not(.dark) .text-white         { color: #1e293b; }
+    html:not(.dark) .text-white\/10     { color: rgba(30,41,59,.10); }
+    html:not(.dark) .text-white\/20     { color: rgba(30,41,59,.20); }
+    html:not(.dark) .text-white\/30     { color: rgba(30,41,59,.35); }
+    html:not(.dark) .text-white\/40     { color: rgba(30,41,59,.45); }
+    html:not(.dark) .text-white\/50     { color: rgba(30,41,59,.55); }
+    html:not(.dark) .text-white\/60     { color: rgba(30,41,59,.65); }
+    html:not(.dark) .text-white\/70     { color: rgba(30,41,59,.75); }
+    html:not(.dark) .text-white\/80     { color: rgba(30,41,59,.85); }
+    html:not(.dark) .text-white\/90     { color: rgba(30,41,59,.92); }
+
+    /* Hover texto */
+    html:not(.dark) .hover\:text-white:hover   { color: #0f172a; }
+    html:not(.dark) .hover\:text-indigo-300:hover { color: #4338ca; }
+
+    /* Fondos blancos semitransparentes → gris muy claro */
+    html:not(.dark) .bg-white\/3   { background-color: rgba(0,0,0,.025); }
+    html:not(.dark) .bg-white\/5   { background-color: rgba(0,0,0,.04);  }
+    html:not(.dark) .bg-white\/8   { background-color: rgba(0,0,0,.05);  }
+    html:not(.dark) .bg-white\/10  { background-color: rgba(0,0,0,.06);  }
+    html:not(.dark) .bg-white\/15  { background-color: rgba(0,0,0,.08);  }
+    html:not(.dark) .bg-white\/20  { background-color: rgba(0,0,0,.10);  }
+
+    /* Hover fondos */
+    html:not(.dark) .hover\:bg-white\/5:hover  { background-color: rgba(0,0,0,.04); }
+    html:not(.dark) .hover\:bg-white\/6:hover  { background-color: rgba(0,0,0,.05); }
+    html:not(.dark) .hover\:bg-white\/8:hover  { background-color: rgba(0,0,0,.06); }
+
+    /* Bordes blancos semitransparentes → gris claro */
+    html:not(.dark) .border-white\/5   { border-color: rgba(0,0,0,.07);  }
+    html:not(.dark) .border-white\/8   { border-color: rgba(0,0,0,.09);  }
+    html:not(.dark) .border-white\/10  { border-color: rgba(0,0,0,.10);  }
+    html:not(.dark) .border-white\/12  { border-color: rgba(0,0,0,.12);  }
+
+    /* Placeholder */
+    html:not(.dark) .placeholder-white\/30::placeholder { color: rgba(30,41,59,.40); }
+
+    /* Inputs con fondo/borde oscuro → claro */
+    html:not(.dark) input.bg-white\/5,
+    html:not(.dark) input.border-white\/10 { background-color: #f8fafc; border-color: #e2e8f0; color: #1e293b; }
+
+    /* Indigo text en light mode: mantener pero más oscuro */
+    html:not(.dark) .text-indigo-400   { color: #4338ca; }
+    html:not(.dark) .text-indigo-300   { color: #4f46e5; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+{% if user.is_authenticated %}
+<!-- ─── App Shell ──────────────────────────────────────── -->
+<div class="flex h-screen overflow-hidden" id="app"
+     x-data="{ sidebarOpen: localStorage.getItem('sidebar') !== 'collapsed' }">
+
+  <!-- ─── Sidebar ──────────────────────────────────────── -->
+  <aside class="sidebar app-sidebar flex-shrink-0 flex flex-col h-full border-r z-40"
+         :class="sidebarOpen ? 'w-64' : 'w-[72px]'">
+
+    <!-- Logo -->
+    <div class="flex items-center gap-3 px-4 py-5 border-b sidebar-border" style="border-color: var(--border)">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+           style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+        <span class="text-white font-bold text-lg">P</span>
+      </div>
+      <div x-show="sidebarOpen" x-transition>
+        <div class="font-bold text-sm leading-tight sidebar-username" style="color:var(--text-main)">ProjectForge</div>
+        <div class="text-xs text-indigo-500 font-medium">3D Platform</div>
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <a href="{% url 'core:dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+        <i data-lucide="layout-dashboard" class="w-5 h-5 flex-shrink-0"></i>
+        <span x-show="sidebarOpen" x-transition>Dashboard</span>
+      </a>
+      <a href="{% url 'core:dashboard-3d' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard-3d' %}active{% endif %}">
+        <i data-lucide="globe" class="w-5 h-5 flex-shrink-0"></i>
+        <span x-show="sidebarOpen" x-transition>Vista 3D</span>
+      </a>
+      <a href="{% url 'projects:list' %}" class="nav-item {% if 'projects' in request.path %}active{% endif %}">
+        <i data-lucide="folder-kanban" class="w-5 h-5 flex-shrink-0"></i>
+        <span x-show="sidebarOpen" x-transition>Proyectos</span>
+      </a>
+      <a href="#" class="nav-item">
+        <i data-lucide="check-square" class="w-5 h-5 flex-shrink-0"></i>
+        <span x-show="sidebarOpen" x-transition>Mis Tareas</span>
+      </a>
+      <a href="{% url 'core:analytics' %}" class="nav-item {% if 'analytics' in request.path %}active{% endif %}">
+        <i data-lucide="bar-chart-3" class="w-5 h-5 flex-shrink-0"></i>
+        <span x-show="sidebarOpen" x-transition>Analytics</span>
+      </a>
+      <a href="{% url 'team' %}" class="nav-item">
+        <i data-lucide="users" class="w-5 h-5 flex-shrink-0"></i>
+        <span x-show="sidebarOpen" x-transition>Equipo</span>
+      </a>
+      <a href="#" class="nav-item" x-data="{ count: {{ unread_messages_count|default:0 }} }">
+        <i data-lucide="message-square" class="w-5 h-5 flex-shrink-0"></i>
+        <span x-show="sidebarOpen" x-transition class="flex-1">Mensajes</span>
+        <span x-show="count > 0 && sidebarOpen"
+              class="bg-indigo-500 text-white text-xs rounded-full px-2 py-0.5"
+              x-text="count"></span>
+      </a>
+
+      <div class="pt-4">
+        <p class="text-xs font-semibold uppercase tracking-wider px-2 mb-2 sidebar-section-label" style="color:var(--text-muted)" x-show="sidebarOpen">Configuración</p>
+        <a href="/admin/" class="nav-item">
+          <i data-lucide="settings" class="w-5 h-5 flex-shrink-0"></i>
+          <span x-show="sidebarOpen" x-transition>Admin</span>
+        </a>
+        <a href="/api/docs/" class="nav-item" target="_blank">
+          <i data-lucide="code-2" class="w-5 h-5 flex-shrink-0"></i>
+          <span x-show="sidebarOpen" x-transition>API Docs</span>
+        </a>
+      </div>
+    </nav>
+
+    <!-- User -->
+    <div class="px-3 py-3 border-t" style="border-color: var(--border)">
+      <a href="{% url 'profile' %}" class="flex items-center gap-3 p-2 rounded-xl transition-all" style="color:var(--text-main)"
+         onmouseover="this.style.background='var(--nav-hover-bg)'" onmouseout="this.style.background=''">
+        <img src="{{ user.avatar_url }}" alt="{{ user.full_name }}"
+             class="w-8 h-8 rounded-full flex-shrink-0 ring-2 ring-indigo-500/30">
+        <div x-show="sidebarOpen" x-transition class="min-w-0">
+          <div class="text-sm font-medium truncate" style="color:var(--text-main)">{{ user.full_name }}</div>
+          <div class="text-xs truncate" style="color:var(--text-muted)">{{ user.title }}</div>
+        </div>
+      </a>
+    </div>
+  </aside>
+
+  <!-- ─── Main ──────────────────────────────────────────── -->
+  <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+    <!-- Top Bar -->
+    <header class="app-header flex items-center justify-between px-6 py-3 border-b"
+            style="backdrop-filter: blur(20px); border-color: var(--border)">
+      <div class="flex items-center gap-4">
+        <button @click="sidebarOpen = !sidebarOpen; localStorage.setItem('sidebar', sidebarOpen ? 'open' : 'collapsed')"
+                class="topbar-btn p-2 rounded-lg transition-all" style="color:var(--nav-color)">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+        <div class="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl border text-sm min-w-64 topbar-search"
+             style="background:var(--glass-bg); border-color:var(--border); color:var(--text-muted)">
+          <i data-lucide="search" class="w-4 h-4"></i>
+          <span>Buscar proyectos, tareas...</span>
+          <kbd class="ml-auto text-xs px-1.5 py-0.5 rounded" style="background:var(--glass-strong-bg)">⌘K</kbd>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- Notifications bell -->
+        <button class="topbar-btn relative p-2 rounded-xl transition-all" style="color:var(--nav-color)"
+                x-data="{ open: false }" @click="open = !open">
+          <i data-lucide="bell" class="w-5 h-5"></i>
+          {% if unread_messages_count %}
+          <span class="absolute top-1 right-1 w-2 h-2 bg-indigo-500 rounded-full"></span>
+          {% endif %}
+        </button>
+
+        <!-- Theme toggle -->
+        <button @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode); document.documentElement.classList.toggle('dark', darkMode)"
+                class="topbar-btn p-2 rounded-xl transition-all" style="color:var(--nav-color)">
+          <i x-show="darkMode" data-lucide="sun" class="w-5 h-5"></i>
+          <i x-show="!darkMode" data-lucide="moon" class="w-5 h-5"></i>
+        </button>
+
+        <!-- Logout -->
+        <a href="{% url 'logout' %}" class="topbar-btn p-2 rounded-xl transition-all hover:text-red-500" style="color:var(--nav-color)">
+          <i data-lucide="log-out" class="w-5 h-5"></i>
+        </a>
+      </div>
+    </header>
+
+    <!-- Page Content -->
+    <main class="flex-1 overflow-y-auto">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+
+{% else %}
+<!-- Unauthenticated layout -->
+<div class="min-h-screen">
+  {% block auth_content %}{% endblock %}
+</div>
+{% endif %}
+
+<!-- ─── Toast container ──────────────────────────────── -->
+<div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3"></div>
+
+<!-- ─── Scripts ──────────────────────────────────────── -->
+<script>
+  // Initialize Lucide icons
+  lucide.createIcons();
+
+  // Global toast utility
+  function showToast(message, type = 'success') {
+    const colors = {
+      success: 'bg-green-500/20 border-green-500/40 text-green-300',
+      error:   'bg-red-500/20   border-red-500/40   text-red-300',
+      warning: 'bg-yellow-500/20 border-yellow-500/40 text-yellow-300',
+      info:    'bg-blue-500/20  border-blue-500/40  text-blue-300',
+    };
+    const icons = { success: 'check-circle', error: 'x-circle', warning: 'alert-triangle', info: 'info' };
+    const el = document.createElement('div');
+    el.className = `toast glass ${colors[type]} px-4 py-3 rounded-xl flex items-center gap-3 border`;
+    el.innerHTML = `<i data-lucide="${icons[type]}" class="w-5 h-5 flex-shrink-0"></i><span class="text-sm font-medium">${message}</span>`;
+    document.getElementById('toast-container').appendChild(el);
+    lucide.createIcons();
+    setTimeout(() => el.remove(), 4000);
+  }
+
+  // GSAP entrance animations
+  document.addEventListener('DOMContentLoaded', () => {
+    gsap.fromTo('.animate-in', { opacity: 0, y: 20 }, { opacity: 1, y: 0, stagger: 0.05, duration: 0.5, ease: 'power2.out' });
+  });
+
+  // WebSocket: notifications
+  {% if user.is_authenticated %}
+  const notifSocket = new WebSocket(`${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/notifications/`);
+  notifSocket.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'notification') showToast(data.title, 'info');
+  };
+  {% endif %}
+</script>
+
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

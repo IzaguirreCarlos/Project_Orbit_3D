@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="p-6 space-y-8" id="dashboard">
+
+  <!-- ─── Header ─────────────────────────────────────── -->
+  <div class="animate-in flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-white">
+        Hola, <span class="gradient-text">{{ user.first_name }}</span> 👋
+      </h1>
+      <p class="text-white/50 text-sm mt-1">Aquí está el resumen de tu trabajo</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="{% url 'projects:create' %}"
+         class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90"
+         style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+        <i data-lucide="plus" class="w-4 h-4"></i>
+        Nuevo Proyecto
+      </a>
+    </div>
+  </div>
+
+  <!-- ─── Stats Cards ─────────────────────────────────── -->
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5" id="stats-grid">
+    <!-- Populated by JS -->
+  </div>
+
+  <!-- ─── Body Grid ────────────────────────────────────── -->
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+    <!-- Active Projects -->
+    <div class="xl:col-span-2 animate-in">
+      <div class="glass rounded-2xl p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="font-semibold text-white">Proyectos Activos</h2>
+          <a href="{% url 'projects:list' %}" class="text-xs text-indigo-400 hover:text-indigo-300">Ver todos →</a>
+        </div>
+        <div class="space-y-3" id="active-projects-list">
+          {% for project in active_projects %}
+          <a href="{% url 'projects:detail' project.id %}"
+             class="flex items-center gap-4 p-4 rounded-xl bg-white/3 hover:bg-white/6 border border-white/5 transition-all group">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xl"
+                 style="background: {{ project.theme_color }}22; border: 1px solid {{ project.theme_color }}44;">
+              🚀
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-medium text-white text-sm truncate">{{ project.name }}</span>
+                <span class="text-xs px-2 py-0.5 rounded-full flex-shrink-0
+                  {% if project.status == 'active' %}status-active
+                  {% elif project.status == 'planning' %}status-planning
+                  {% else %}status-in_review{% endif %}">
+                  {{ project.get_status_display }}
+                </span>
+              </div>
+              <div class="mt-2 flex items-center gap-3">
+                <div class="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div class="h-full rounded-full transition-all"
+                       style="width: {{ project.progress }}%; background: linear-gradient(90deg, #6366f1, #8b5cf6);">
+                  </div>
+                </div>
+                <span class="text-xs text-white/40 flex-shrink-0">{{ project.progress }}%</span>
+              </div>
+            </div>
+          </a>
+          {% empty %}
+          <div class="text-center py-10 text-white/30">
+            <i data-lucide="folder-open" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
+            <p>No tienes proyectos activos</p>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- My Tasks -->
+    <div class="animate-in">
+      <div class="glass rounded-2xl p-6 h-full">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="font-semibold text-white">Mis Tareas</h2>
+          <span class="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-full">
+            {{ pending_tasks.count }}
+          </span>
+        </div>
+        <div class="space-y-2" id="my-tasks-list">
+          {% for task in pending_tasks %}
+          <div class="flex items-start gap-3 p-3 rounded-xl bg-white/3 hover:bg-white/6 border border-white/5 transition-all cursor-pointer">
+            <div class="w-2 h-2 rounded-full mt-2 flex-shrink-0
+              {% if task.priority == 'critical' %}bg-red-400
+              {% elif task.priority == 'high' %}bg-orange-400
+              {% elif task.priority == 'medium' %}bg-yellow-400
+              {% else %}bg-green-400{% endif %}">
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm text-white/80 truncate">{{ task.title }}</p>
+              <div class="flex items-center gap-2 mt-1">
+                <span class="text-xs text-white/30">{{ task.project.name }}</span>
+                {% if task.deadline %}
+                <span class="text-xs {% if task.is_overdue %}text-red-400{% else %}text-white/30{% endif %}">
+                  · {{ task.deadline|date:"d M" }}
+                </span>
+                {% endif %}
+              </div>
+            </div>
+            <span class="text-xs px-1.5 py-0.5 rounded bg-white/5 text-white/40 flex-shrink-0">
+              {{ task.get_status_display }}
+            </span>
+          </div>
+          {% empty %}
+          <div class="text-center py-8 text-white/30">
+            <i data-lucide="check-circle" class="w-10 h-10 mx-auto mb-2 opacity-30"></i>
+            <p class="text-sm">¡Todo al día!</p>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Charts Row ───────────────────────────────────── -->
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 animate-in">
+    <!-- Weekly Productivity -->
+    <div class="glass rounded-2xl p-6">
+      <h2 class="font-semibold text-white mb-5">Productividad Semanal</h2>
+      <canvas id="weeklyChart" height="220"></canvas>
+    </div>
+
+    <!-- Tasks by Status -->
+    <div class="glass rounded-2xl p-6">
+      <h2 class="font-semibold text-white mb-5">Tareas por Estado</h2>
+      <div class="flex items-center justify-center">
+        <canvas id="statusChart" width="280" height="280"></canvas>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const API_BASE = '/api/v1';
+const HEADERS = {
+  'Content-Type': 'application/json',
+  'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
+};
+
+// ─── Fetch dashboard stats ───────────────────────────────
+async function loadDashboardStats() {
+  try {
+    const res = await fetch(`${API_BASE}/analytics/dashboard/`);
+    const data = await res.json();
+
+    const statsGrid = document.getElementById('stats-grid');
+    const cards = [
+      { label: 'Proyectos Activos', value: data.projects.active,    icon: 'folder-kanban', color: '#6366f1', sub: `${data.projects.total} totales` },
+      { label: 'Tareas Completadas', value: data.tasks.done,        icon: 'check-circle',  color: '#22c55e', sub: `${data.tasks.total} totales` },
+      { label: 'En Progreso',        value: data.tasks.in_progress, icon: 'clock',         color: '#f59e0b', sub: 'tareas activas' },
+      { label: 'Avance Promedio',    value: Math.round(data.avg_progress) + '%', icon: 'trending-up', color: '#8b5cf6', sub: 'todos los proyectos' },
+    ];
+
+    statsGrid.innerHTML = cards.map((c, i) => `
+      <div class="stat-card animate-in" style="animation-delay:${i * 0.07}s">
+        <div class="flex items-start justify-between mb-4">
+          <div class="w-11 h-11 rounded-xl flex items-center justify-center"
+               style="background:${c.color}22; border:1px solid ${c.color}44;">
+            <i data-lucide="${c.icon}" class="w-5 h-5" style="color:${c.color}"></i>
+          </div>
+          <span class="text-2xl font-bold text-white">${c.value}</span>
+        </div>
+        <p class="text-sm font-medium text-white/80">${c.label}</p>
+        <p class="text-xs text-white/40 mt-1">${c.sub}</p>
+      </div>
+    `).join('');
+    lucide.createIcons();
+  } catch(e) {
+    console.error('Stats error:', e);
+  }
+}
+
+// ─── Weekly productivity chart ──────────────────────────
+async function loadWeeklyChart() {
+  try {
+    const res = await fetch(`${API_BASE}/analytics/productivity/weekly/`);
+    const data = await res.json();
+    const ctx = document.getElementById('weeklyChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: data.map(d => new Date(d.date).toLocaleDateString('es', {weekday:'short'})),
+        datasets: [{
+          label: 'Tareas Completadas',
+          data: data.map(d => d.completed),
+          backgroundColor: 'rgba(99,102,241,0.6)',
+          borderColor: '#6366f1',
+          borderWidth: 2,
+          borderRadius: 8,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af' } },
+          y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#9ca3af', stepSize: 1 }, beginAtZero: true },
+        }
+      }
+    });
+  } catch(e) { console.error('Weekly chart error:', e); }
+}
+
+// ─── Tasks by status donut ──────────────────────────────
+async function loadStatusChart() {
+  try {
+    const res = await fetch(`${API_BASE}/analytics/tasks/by-status/`);
+    const data = await res.json();
+    const colors = {
+      backlog:'#64748b', todo:'#6366f1', in_progress:'#f59e0b',
+      review:'#8b5cf6', testing:'#06b6d4', done:'#22c55e'
+    };
+    const ctx = document.getElementById('statusChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: data.map(d => d.status),
+        datasets: [{
+          data: data.map(d => d.count),
+          backgroundColor: data.map(d => colors[d.status] || '#6366f1'),
+          borderWidth: 0,
+          hoverOffset: 8,
+        }]
+      },
+      options: {
+        responsive: false,
+        cutout: '65%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { color: '#9ca3af', padding: 12, font: { size: 12 } }
+          }
+        }
+      }
+    });
+  } catch(e) { console.error('Status chart error:', e); }
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  loadDashboardStats();
+  loadWeeklyChart();
+  loadStatusChart();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Proyectos{% endblock %}
+
+{% block content %}
+<div class="p-6" x-data="projectsList()">
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-6 animate-in">
+    <div>
+      <h1 class="text-2xl font-bold text-white">Proyectos</h1>
+      <p class="text-white/40 text-sm mt-1" x-text="`${total} proyectos en total`"></p>
+    </div>
+    <a href="{% url 'projects:create' %}"
+       class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white"
+       style="background:linear-gradient(135deg,#6366f1,#8b5cf6);">
+      <i data-lucide="plus" class="w-4 h-4"></i>
+      Nuevo Proyecto
+    </a>
+  </div>
+
+  <!-- Filters -->
+  <div class="flex flex-wrap items-center gap-3 mb-6 animate-in">
+    <input type="text" placeholder="Buscar proyectos..." x-model="search" @input.debounce.300ms="loadProjects()"
+           class="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-indigo-500 w-64">
+    <select x-model="statusFilter" @change="loadProjects()"
+            class="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+      <option value="">Todos los estados</option>
+      <option value="planning">Planning</option>
+      <option value="active">Active</option>
+      <option value="in_review">In Review</option>
+      <option value="testing">Testing</option>
+      <option value="completed">Completed</option>
+    </select>
+    <select x-model="priorityFilter" @change="loadProjects()"
+            class="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+      <option value="">Todas las prioridades</option>
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+      <option value="critical">Critical</option>
+    </select>
+    <div class="flex rounded-xl overflow-hidden border border-white/10">
+      <button @click="viewMode='grid'" :class="viewMode==='grid' ? 'bg-indigo-500/30 text-white' : 'text-white/40'"
+              class="px-3 py-2 transition-all"><i data-lucide="grid-3x3" class="w-4 h-4"></i></button>
+      <button @click="viewMode='list'" :class="viewMode==='list' ? 'bg-indigo-500/30 text-white' : 'text-white/40'"
+              class="px-3 py-2 transition-all"><i data-lucide="list" class="w-4 h-4"></i></button>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div x-show="loading" class="flex items-center justify-center py-20">
+    <div class="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+  </div>
+
+  <!-- Grid view -->
+  <div x-show="!loading && viewMode==='grid'" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+    <template x-for="p in projects" :key="p.id">
+      <a :href="`/projects/${p.id}/`"
+         class="glass rounded-2xl p-5 hover:border-indigo-500/40 border border-white/5 transition-all group animate-in">
+        <div class="flex items-start justify-between mb-4">
+          <div class="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+               :style="`background:${p.theme_color}22; border:1px solid ${p.theme_color}44`">🚀</div>
+          <span class="text-xs px-2 py-1 rounded-full font-medium"
+                :class="`status-${p.status}`" x-text="p.status.replace('_',' ').toUpperCase()"></span>
+        </div>
+        <h3 class="font-semibold text-white mb-1 truncate group-hover:text-indigo-300 transition-all" x-text="p.name"></h3>
+        <p class="text-xs text-white/40 mb-4" x-text="p.client || 'Sin cliente'"></p>
+        <div class="space-y-2">
+          <div class="flex justify-between text-xs text-white/50">
+            <span>Progreso</span>
+            <span x-text="`${p.progress}%`"></span>
+          </div>
+          <div class="h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div class="h-full rounded-full" :style="`width:${p.progress}%; background:linear-gradient(90deg,#6366f1,#8b5cf6)`"></div>
+          </div>
+        </div>
+        <div class="flex items-center justify-between mt-4 pt-4 border-t border-white/5">
+          <span class="text-xs text-white/30" x-text="`${p.tasks_count} tareas`"></span>
+          <span class="text-xs text-white/30" x-text="`${p.members_count} miembros`"></span>
+          <span class="text-xs px-1.5 py-0.5 rounded font-medium"
+                :class="{
+                  'priority-low':p.priority==='low',
+                  'priority-medium':p.priority==='medium',
+                  'priority-high':p.priority==='high',
+                  'priority-critical':p.priority==='critical'
+                }" x-text="p.priority"></span>
+        </div>
+      </a>
+    </template>
+
+    <div x-show="!loading && projects.length === 0" class="col-span-3 text-center py-20">
+      <i data-lucide="folder-open" class="w-14 h-14 mx-auto text-white/20 mb-4"></i>
+      <p class="text-white/40">No se encontraron proyectos</p>
+    </div>
+  </div>
+
+  <!-- List view -->
+  <div x-show="!loading && viewMode==='list'" class="glass rounded-2xl overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-white/5">
+          <th class="text-left px-6 py-3 text-white/40 font-medium">Proyecto</th>
+          <th class="text-left px-4 py-3 text-white/40 font-medium">Estado</th>
+          <th class="text-left px-4 py-3 text-white/40 font-medium">Prioridad</th>
+          <th class="text-left px-4 py-3 text-white/40 font-medium">Progreso</th>
+          <th class="text-left px-4 py-3 text-white/40 font-medium">Tareas</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="p in projects" :key="p.id">
+          <tr class="border-b border-white/5 hover:bg-white/3 transition-all cursor-pointer"
+              @click="window.location.href=`/projects/${p.id}/`">
+            <td class="px-6 py-3">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center text-sm"
+                     :style="`background:${p.theme_color}22`">🚀</div>
+                <div>
+                  <div class="font-medium text-white" x-text="p.name"></div>
+                  <div class="text-xs text-white/30" x-text="p.client || '—'"></div>
+                </div>
+              </div>
+            </td>
+            <td class="px-4 py-3">
+              <span class="text-xs px-2 py-1 rounded-full" :class="`status-${p.status}`"
+                    x-text="p.status.replace('_',' ')"></span>
+            </td>
+            <td class="px-4 py-3">
+              <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                    :class="`priority-${p.priority}`" x-text="p.priority"></span>
+            </td>
+            <td class="px-4 py-3 w-36">
+              <div class="flex items-center gap-2">
+                <div class="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div class="h-full rounded-full" :style="`width:${p.progress}%;background:linear-gradient(90deg,#6366f1,#8b5cf6)`"></div>
+                </div>
+                <span class="text-xs text-white/40 w-8" x-text="`${p.progress}%`"></span>
+              </div>
+            </td>
+            <td class="px-4 py-3 text-white/50" x-text="p.tasks_count"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function projectsList() {
+  return {
+    projects: [], total: 0, loading: true,
+    search: '', statusFilter: '', priorityFilter: '',
+    viewMode: 'grid',
+
+    async loadProjects() {
+      this.loading = true;
+      const params = new URLSearchParams();
+      if (this.search) params.set('search', this.search);
+      if (this.statusFilter) params.set('status', this.statusFilter);
+      if (this.priorityFilter) params.set('priority', this.priorityFilter);
+      const res = await fetch(`/api/v1/projects/?${params}`);
+      const data = await res.json();
+      this.projects = data.results || data;
+      this.total = data.count || this.projects.length;
+      this.loading = false;
+      lucide.createIcons();
+    },
+
+    init() { this.loadProjects(); }
+  };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}Kanban — {{ project.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .kanban-col {
+    min-width: 280px; max-width: 280px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px;
+  }
+  .task-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 14px;
+    cursor: grab;
+    transition: all 0.2s ease;
+    user-select: none;
+  }
+  .task-card:hover { border-color: rgba(99,102,241,0.4); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+  .task-card.dragging { opacity: 0.5; cursor: grabbing; transform: rotate(2deg) scale(1.02); }
+  .kanban-drop-zone { min-height: 60px; transition: background 0.2s; border-radius: 10px; }
+  .kanban-drop-zone.drag-over { background: rgba(99,102,241,0.1); border: 2px dashed rgba(99,102,241,0.4); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-full">
+  <!-- Header -->
+  <div class="flex items-center justify-between px-6 py-4 border-b border-white/5">
+    <div class="flex items-center gap-4">
+      <a href="{% url 'projects:detail' project.id %}" class="text-white/40 hover:text-white transition-all">
+        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+      </a>
+      <div>
+        <h1 class="font-bold text-white text-lg">{{ project.name }}</h1>
+        <p class="text-xs text-white/40">Tablero Kanban</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button onclick="openNewTaskModal()"
+              class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white"
+              style="background: linear-gradient(135deg,#6366f1,#8b5cf6);">
+        <i data-lucide="plus" class="w-4 h-4"></i>
+        Nueva Tarea
+      </button>
+    </div>
+  </div>
+
+  <!-- Kanban Board -->
+  <div class="flex gap-4 p-6 overflow-x-auto flex-1" id="kanban-board">
+    <!-- Columns rendered by JS -->
+  </div>
+</div>
+
+<!-- ─── New Task Modal ────────────────────────────────── -->
+<div id="task-modal" class="fixed inset-0 z-50 hidden items-center justify-center"
+     style="background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);">
+  <div class="glass-strong rounded-2xl p-6 w-full max-w-lg mx-4 animate-in">
+    <div class="flex items-center justify-between mb-5">
+      <h2 class="font-bold text-white text-lg">Nueva Tarea</h2>
+      <button onclick="closeModal()" class="text-white/40 hover:text-white">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <form id="task-form" class="space-y-4">
+      <div>
+        <label class="text-xs font-medium text-white/60 block mb-1.5">Título *</label>
+        <input type="text" name="title" required
+               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-all">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-white/60 block mb-1.5">Descripción</label>
+        <textarea name="description" rows="3"
+                  class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 transition-all resize-none"></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="text-xs font-medium text-white/60 block mb-1.5">Prioridad</label>
+          <select name="priority" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-medium text-white/60 block mb-1.5">Fecha límite</label>
+          <input type="datetime-local" name="deadline"
+                 class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500">
+        </div>
+      </div>
+      <input type="hidden" name="status" id="new-task-status" value="todo">
+      <input type="hidden" name="project" value="{{ project.id }}">
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" onclick="closeModal()"
+                class="px-4 py-2.5 rounded-xl text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 transition-all">
+          Cancelar
+        </button>
+        <button type="submit"
+                class="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
+                style="background: linear-gradient(135deg,#6366f1,#8b5cf6);">
+          Crear Tarea
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const PROJECT_ID = '{{ project.id }}';
+const CSRF = document.querySelector('meta[name="csrf-token"]').content;
+
+const COLUMNS = [
+  { key:'backlog',     label:'Backlog',     color:'#64748b', emoji:'📋' },
+  { key:'todo',        label:'To Do',       color:'#6366f1', emoji:'📌' },
+  { key:'in_progress', label:'In Progress', color:'#f59e0b', emoji:'⚡' },
+  { key:'review',      label:'Review',      color:'#8b5cf6', emoji:'🔍' },
+  { key:'testing',     label:'Testing',     color:'#06b6d4', emoji:'🧪' },
+  { key:'done',        label:'Done',        color:'#22c55e', emoji:'✅' },
+];
+
+const PRIORITY_STYLES = {
+  low:      'priority-low',
+  medium:   'priority-medium',
+  high:     'priority-high',
+  critical: 'priority-critical',
+};
+
+let tasks = {};
+let draggedTask = null;
+let draggedFrom = null;
+
+// ─── Load Kanban ─────────────────────────────────────────
+async function loadKanban() {
+  const res = await fetch(`/api/v1/tasks/kanban/${PROJECT_ID}/`);
+  tasks = await res.json();
+  renderBoard();
+}
+
+// ─── Render Board ─────────────────────────────────────────
+function renderBoard() {
+  const board = document.getElementById('kanban-board');
+  board.innerHTML = COLUMNS.map(col => `
+    <div class="kanban-col flex flex-col flex-shrink-0" data-col="${col.key}">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-white/5">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${col.color}"></span>
+          <span class="font-semibold text-sm text-white">${col.emoji} ${col.label}</span>
+          <span class="text-xs bg-white/10 text-white/60 rounded-full px-2 py-0.5 ml-1">
+            ${(tasks[col.key] || []).length}
+          </span>
+        </div>
+        <button onclick="openNewTaskModal('${col.key}')" class="text-white/30 hover:text-white/70 transition-all">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div class="flex-1 p-3 space-y-2 kanban-drop-zone overflow-y-auto max-h-[calc(100vh-220px)]"
+           data-col="${col.key}"
+           ondragover="onDragOver(event)"
+           ondragleave="onDragLeave(event)"
+           ondrop="onDrop(event, '${col.key}')">
+        ${(tasks[col.key] || []).map(t => renderTask(t)).join('')}
+      </div>
+    </div>
+  `).join('');
+  lucide.createIcons();
+  attachDragEvents();
+}
+
+// ─── Task Card HTML ───────────────────────────────────────
+function renderTask(task) {
+  const overdue = task.is_overdue ? 'border-red-500/40' : 'border-white/6';
+  const deadline = task.deadline ? new Date(task.deadline).toLocaleDateString('es', {day:'2-digit', month:'short'}) : '';
+  return `
+    <div class="task-card ${overdue}" data-task-id="${task.id}" draggable="true">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <p class="text-sm text-white/90 font-medium leading-tight">${task.title}</p>
+      </div>
+      <div class="flex items-center justify-between gap-2 mt-3">
+        <span class="text-xs px-2 py-0.5 rounded-full font-medium ${PRIORITY_STYLES[task.priority] || ''}">
+          ${task.priority}
+        </span>
+        <div class="flex items-center gap-2">
+          ${deadline ? `<span class="text-xs ${task.is_overdue ? 'text-red-400' : 'text-white/30'}">${deadline}</span>` : ''}
+          ${task.story_points ? `<span class="text-xs bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded">${task.story_points}pt</span>` : ''}
+          ${task.assignee_avatar ? `<img src="${task.assignee_avatar}" alt="" class="w-6 h-6 rounded-full ring-1 ring-indigo-500/30" title="${task.assignee_name}">` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ─── Drag & Drop ──────────────────────────────────────────
+function attachDragEvents() {
+  document.querySelectorAll('.task-card').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      draggedTask = card.dataset.taskId;
+      draggedFrom = card.closest('.kanban-drop-zone').dataset.col;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  });
+}
+
+function onDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+}
+function onDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+
+async function onDrop(e, toStatus) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!draggedTask || draggedFrom === toStatus) return;
+
+  // Optimistic update
+  const task = (tasks[draggedFrom] || []).find(t => t.id === draggedTask);
+  if (!task) return;
+  tasks[draggedFrom] = tasks[draggedFrom].filter(t => t.id !== draggedTask);
+  task.status = toStatus;
+  tasks[toStatus] = [task, ...(tasks[toStatus] || [])];
+  renderBoard();
+
+  // API call
+  try {
+    await fetch(`/api/v1/tasks/${draggedTask}/move/`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ status: toStatus }),
+    });
+    showToast(`Tarea movida a ${toStatus.replace('_', ' ')}`, 'success');
+  } catch(err) {
+    showToast('Error al mover la tarea', 'error');
+    loadKanban(); // revert
+  }
+}
+
+// ─── New Task Modal ───────────────────────────────────────
+function openNewTaskModal(status = 'todo') {
+  document.getElementById('new-task-status').value = status;
+  document.getElementById('task-modal').classList.remove('hidden');
+  document.getElementById('task-modal').classList.add('flex');
+}
+function closeModal() {
+  document.getElementById('task-modal').classList.add('hidden');
+  document.getElementById('task-modal').classList.remove('flex');
+}
+
+document.getElementById('task-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = Object.fromEntries(fd.entries());
+  if (!body.deadline) delete body.deadline;
+
+  try {
+    const res = await fetch('/api/v1/tasks/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      showToast('Tarea creada', 'success');
+      closeModal();
+      e.target.reset();
+      loadKanban();
+    } else {
+      showToast('Error al crear la tarea', 'error');
+    }
+  } catch(err) {
+    showToast('Error de conexión', 'error');
+  }
+});
+
+// Init
+loadKanban();
+</script>
+{% endblock %}

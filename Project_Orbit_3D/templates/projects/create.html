@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Nuevo Proyecto{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto p-8" x-data="createProject()">
+  <div class="mb-8 animate-in">
+    <a href="{% url 'projects:list' %}" class="text-white/40 hover:text-white text-sm flex items-center gap-2 mb-4">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i> Volver a proyectos
+    </a>
+    <h1 class="text-2xl font-bold text-white">Crear Nuevo Proyecto</h1>
+    <p class="text-white/40 text-sm mt-1">Define los detalles de tu proyecto</p>
+  </div>
+
+  <div class="glass rounded-2xl p-6 space-y-5 animate-in">
+    <div class="grid grid-cols-1 gap-5">
+      <div>
+        <label class="text-xs font-semibold text-white/60 uppercase tracking-wider block mb-2">Nombre del Proyecto *</label>
+        <input type="text" x-model="form.name" required
+               class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500 transition-all"
+               placeholder="Mi Proyecto Épico">
+      </div>
+      <div>
+        <label class="text-xs font-semibold text-white/60 uppercase tracking-wider block mb-2">Descripción</label>
+        <textarea x-model="form.description" rows="3"
+                  class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500 transition-all resize-none"
+                  placeholder="Describe el objetivo del proyecto..."></textarea>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="text-xs font-semibold text-white/60 uppercase tracking-wider block mb-2">Cliente</label>
+          <input type="text" x-model="form.client"
+                 class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500 transition-all">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-white/60 uppercase tracking-wider block mb-2">Prioridad</label>
+          <select x-model="form.priority"
+                  class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-white/60 uppercase tracking-wider block mb-2">Fecha de Inicio</label>
+          <input type="date" x-model="form.start_date"
+                 class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500 transition-all">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-white/60 uppercase tracking-wider block mb-2">Fecha de Entrega</label>
+          <input type="date" x-model="form.end_date"
+                 class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500 transition-all">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-white/60 uppercase tracking-wider block mb-2">Presupuesto (USD)</label>
+          <input type="number" x-model="form.budget" min="0" step="1000"
+                 class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-indigo-500 transition-all"
+                 placeholder="50000">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-white/60 uppercase tracking-wider block mb-2">Color del Tema</label>
+          <div class="flex items-center gap-3">
+            <input type="color" x-model="form.theme_color"
+                   class="w-12 h-10 bg-white/5 border border-white/10 rounded-xl cursor-pointer">
+            <span class="text-sm text-white/60" x-text="form.theme_color"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-3 pt-4 border-t border-white/5">
+      <a href="{% url 'projects:list' %}"
+         class="px-5 py-2.5 rounded-xl text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 transition-all">
+        Cancelar
+      </a>
+      <button @click="submit()"
+              class="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 flex items-center gap-2"
+              style="background: linear-gradient(135deg,#6366f1,#8b5cf6);"
+              :disabled="loading">
+        <span x-show="!loading">Crear Proyecto</span>
+        <span x-show="loading" class="flex items-center gap-2">
+          <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          Creando...
+        </span>
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function createProject() {
+  return {
+    loading: false,
+    form: {
+      name: '', description: '', client: '',
+      priority: 'medium', start_date: '', end_date: '',
+      budget: '', theme_color: '#6366f1',
+    },
+    async submit() {
+      if (!this.form.name) return showToast('El nombre es requerido', 'error');
+      this.loading = true;
+      const body = { ...this.form };
+      if (!body.budget) delete body.budget;
+      if (!body.start_date) delete body.start_date;
+      if (!body.end_date) delete body.end_date;
+      try {
+        const res = await fetch('/api/v1/projects/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
+          },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          showToast('Proyecto creado exitosamente', 'success');
+          setTimeout(() => window.location.href = `/projects/${data.id}/`, 500);
+        } else {
+          const err = await res.json();
+          showToast(Object.values(err).flat().join(' '), 'error');
+        }
+      } catch(e) {
+        showToast('Error de conexión', 'error');
+      }
+      this.loading = false;
+    }
+  };
+}
+</script>
+{% endblock %}

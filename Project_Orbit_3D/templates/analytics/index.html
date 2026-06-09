@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+
+{% block content %}
+<div class="p-6 space-y-6" x-data="analyticsPage()">
+  <div class="animate-in">
+    <h1 class="text-2xl font-bold text-white">Centro de Analytics</h1>
+    <p class="text-white/40 text-sm mt-1">Métricas de productividad en tiempo real</p>
+  </div>
+
+  <!-- Stat Cards -->
+  <div class="grid grid-cols-2 xl:grid-cols-4 gap-4 animate-in" id="exec-stats">
+    <div class="stat-card"><div class="text-white/40 text-xs mb-3">Proyectos Activos</div><div class="text-3xl font-bold gradient-text" id="s-projects">—</div></div>
+    <div class="stat-card"><div class="text-white/40 text-xs mb-3">Tareas Completadas</div><div class="text-3xl font-bold gradient-text" id="s-done">—</div></div>
+    <div class="stat-card"><div class="text-white/40 text-xs mb-3">En Progreso</div><div class="text-3xl font-bold gradient-text" id="s-wip">—</div></div>
+    <div class="stat-card"><div class="text-white/40 text-xs mb-3 text-red-400">Vencidas</div><div class="text-3xl font-bold text-red-400" id="s-overdue">—</div></div>
+  </div>
+
+  <!-- Charts Grid -->
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-in">
+    <div class="xl:col-span-2 glass rounded-2xl p-6">
+      <h2 class="font-semibold text-white mb-4">Productividad Semanal</h2>
+      <canvas id="weeklyBarChart" height="200"></canvas>
+    </div>
+    <div class="glass rounded-2xl p-6">
+      <h2 class="font-semibold text-white mb-4">Distribución de Tareas</h2>
+      <canvas id="donutChart" width="260" height="260" class="mx-auto block"></canvas>
+    </div>
+  </div>
+
+  <!-- Team Velocity -->
+  <div class="glass rounded-2xl p-6 animate-in">
+    <h2 class="font-semibold text-white mb-5">Velocidad del Equipo (última semana)</h2>
+    <canvas id="velocityChart" height="120"></canvas>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function analyticsPage() {
+  return {
+    async init() {
+      await Promise.all([this.loadExecStats(), this.loadWeekly(), this.loadDonut(), this.loadVelocity()]);
+    },
+    async loadExecStats() {
+      const r = await fetch('/api/v1/analytics/dashboard/');
+      const d = await r.json();
+      document.getElementById('s-projects').textContent = d.projects.active;
+      document.getElementById('s-done').textContent = d.tasks.done;
+      document.getElementById('s-wip').textContent = d.tasks.in_progress;
+      document.getElementById('s-overdue').textContent = d.tasks.overdue;
+    },
+    async loadWeekly() {
+      const r = await fetch('/api/v1/analytics/productivity/weekly/');
+      const d = await r.json();
+      new Chart(document.getElementById('weeklyBarChart').getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: d.map(x => new Date(x.date).toLocaleDateString('es', {weekday:'short', day:'numeric'})),
+          datasets: [{
+            label: 'Tareas completadas',
+            data: d.map(x => x.completed),
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99,102,241,0.1)',
+            tension: 0.4, fill: true,
+            pointBackgroundColor: '#6366f1',
+            pointRadius: 5,
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: '#9ca3af' } } },
+          scales: {
+            x: { grid: { color:'rgba(255,255,255,0.05)' }, ticks: { color:'#9ca3af' } },
+            y: { grid: { color:'rgba(255,255,255,0.05)' }, ticks: { color:'#9ca3af' }, beginAtZero: true },
+          }
+        }
+      });
+    },
+    async loadDonut() {
+      const r = await fetch('/api/v1/analytics/tasks/by-status/');
+      const d = await r.json();
+      const COLORS = { backlog:'#64748b', todo:'#6366f1', in_progress:'#f59e0b', review:'#8b5cf6', testing:'#06b6d4', done:'#22c55e' };
+      new Chart(document.getElementById('donutChart').getContext('2d'), {
+        type: 'doughnut',
+        data: {
+          labels: d.map(x => x.status),
+          datasets: [{ data: d.map(x => x.count), backgroundColor: d.map(x => COLORS[x.status] || '#6366f1'), borderWidth: 0, hoverOffset: 6 }]
+        },
+        options: { responsive: false, cutout: '62%', plugins: { legend: { position:'bottom', labels: { color:'#9ca3af', padding:10, font:{size:11} } } } }
+      });
+    },
+    async loadVelocity() {
+      const r = await fetch('/api/v1/analytics/team/velocity/');
+      const d = await r.json();
+      new Chart(document.getElementById('velocityChart').getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: d.map(x => `${x.assignee__first_name} ${x.assignee__last_name}`),
+          datasets: [{ label: 'Tareas completadas', data: d.map(x => x.completed),
+            backgroundColor: 'rgba(139,92,246,0.6)', borderColor: '#8b5cf6', borderWidth: 2, borderRadius: 8, borderSkipped: false }]
+        },
+        options: { indexAxis: 'y', responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { x: { grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#9ca3af'} },
+                    y: { grid:{color:'rgba(255,255,255,0.05)'}, ticks:{color:'#9ca3af'} } }
+        }
+      });
+    }
+  };
+}
+</script>
+{% endblock %}
