@@ -32,6 +32,9 @@ urlpatterns = [
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 
+    # Health check (Render probe)
+    path('api/health/', include('apps.core.health_urls')),
+
     # Frontend Views
     path('', include('apps.core.urls')),
     path('accounts/', include('apps.accounts.web_urls')),

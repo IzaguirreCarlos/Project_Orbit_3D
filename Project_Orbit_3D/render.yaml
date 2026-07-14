@@ -1,0 +1,186 @@
+# ═══════════════════════════════════════════════════════════════
+#  ProjectForge 3D — Render Blueprint
+#  Despliega: Web (Daphne ASGI), Celery Worker, Celery Beat,
+#             Redis y PostgreSQL
+#
+#  Render docs: https://render.com/docs/blueprint-spec
+# ═══════════════════════════════════════════════════════════════
+
+services:
+
+  # ─── Web Service (Django + Channels via Daphne) ───────────────
+  - type: web
+    name: projectforge-web
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter          # cambia a "free" solo para pruebas (no soporta workers)
+    region: oregon         # elige la más cercana a tus usuarios
+    branch: main
+    healthCheckPath: /api/health/
+    autoDeploy: true
+
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+
+      - key: SECRET_KEY
+        generateValue: true        # Render genera uno aleatorio seguro
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: projectforge-db
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: projectforge-redis
+          property: connectionString
+
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: projectforge-redis
+          property: connectionString
+
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: projectforge-redis
+          property: connectionString
+
+      # ── Dominio: actualiza con tu URL real de Render ──────────
+      - key: ALLOWED_HOSTS
+        value: "projectforge-web.onrender.com,localhost,127.0.0.1"
+
+      - key: CORS_ALLOWED_ORIGINS
+        value: "https://projectforge-web.onrender.com"
+
+      # ── Email (configura con tu proveedor SMTP real) ──────────
+      - key: EMAIL_BACKEND
+        value: django.core.mail.backends.smtp.EmailBackend
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USE_TLS
+        value: "True"
+      - key: EMAIL_HOST_USER
+        sync: false          # se rellena desde el dashboard de Render
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+
+      # ── JWT ───────────────────────────────────────────────────
+      - key: JWT_ACCESS_TOKEN_LIFETIME_MINUTES
+        value: "60"
+      - key: JWT_REFRESH_TOKEN_LIFETIME_DAYS
+        value: "7"
+
+  # ─── Celery Worker ────────────────────────────────────────────
+  - type: worker
+    name: projectforge-celery-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: oregon
+    branch: main
+    autoDeploy: true
+    dockerCommand: celery -A config worker --loglevel=info --concurrency=2
+
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: projectforge-web
+          envVarKey: SECRET_KEY
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: projectforge-db
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: projectforge-redis
+          property: connectionString
+
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: projectforge-redis
+          property: connectionString
+
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: projectforge-redis
+          property: connectionString
+
+      - key: ALLOWED_HOSTS
+        value: "localhost"
+
+  # ─── Celery Beat (Scheduler) ──────────────────────────────────
+  - type: worker
+    name: projectforge-celery-beat
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: oregon
+    branch: main
+    autoDeploy: true
+    dockerCommand: celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: projectforge-web
+          envVarKey: SECRET_KEY
+
+      - key: DATABASE_URL
+        fromDatabase:
+          name: projectforge-db
+          property: connectionString
+
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: projectforge-redis
+          property: connectionString
+
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: projectforge-redis
+          property: connectionString
+
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: projectforge-redis
+          property: connectionString
+
+      - key: ALLOWED_HOSTS
+        value: "localhost"
+
+  # ─── Redis ────────────────────────────────────────────────────
+  - type: redis
+    name: projectforge-redis
+    plan: free
+    region: oregon
+    ipAllowList: []            # solo acceso interno entre servicios
+
+# ─── PostgreSQL ───────────────────────────────────────────────
+databases:
+  - name: projectforge-db
+    plan: free
+    region: oregon
+    databaseName: projectforge_db
+    user: projectforge

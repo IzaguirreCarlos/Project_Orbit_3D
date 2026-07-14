@@ -1,6 +1,23 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import connection
 from django.db.models import Q
+from django.http import JsonResponse
+from django.views import View
 from django.views.generic import TemplateView
+
+
+class HealthCheckView(View):
+    """Render health check — verifica DB y responde 200."""
+
+    def get(self, request):
+        try:
+            connection.ensure_connection()
+            db_ok = True
+        except Exception:
+            db_ok = False
+
+        status = 200 if db_ok else 503
+        return JsonResponse({'status': 'ok' if db_ok else 'error', 'db': db_ok}, status=status)
 
 
 class DashboardView(LoginRequiredMixin, TemplateView):
