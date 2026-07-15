@@ -84,6 +84,7 @@ services:
     name: projectforge-redis
     plan: free
     region: oregon
+    ipAllowList: []
 
 
 # ─── PostgreSQL ────────────────────────────────────────────────
