@@ -26,6 +26,19 @@ class TaskListCreateView(generics.ListCreateAPIView):
             Q(project__assignments__user=user) | Q(project__owner=user)
         ).select_related('assignee', 'creator', 'project').distinct()
 
+    def perform_create(self, serializer):
+        from apps.projects.models import Project
+        project = serializer.validated_data.get('project')
+        user = self.request.user
+        has_access = project is not None and (
+            project.owner_id == user.id
+            or project.assignments.filter(user=user).exists()
+        )
+        if not has_access:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('You are not a member of this project.')
+        serializer.save()
+
 
 class TaskDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = TaskSerializer
@@ -142,6 +155,13 @@ class AttachmentCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
+        task_qs = Task.objects.filter(
+            id=self.kwargs['task_pk'],
+            project__assignments__user=self.request.user,
+        ).distinct()
+        if not task_qs.exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied
         f = self.request.FILES.get('file')
         serializer.save(
             task_id=self.kwargs['task_pk'],
@@ -158,5 +178,6 @@ class TaskHistoryView(generics.ListAPIView):
 
     def get_queryset(self):
         return TaskHistory.objects.filter(
-            task_id=self.kwargs['task_pk']
-        ).select_related('user')
+            task_id=self.kwargs['task_pk'],
+            task__project__assignments__user=self.request.user,
+        ).select_related('user').distinct()

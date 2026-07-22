@@ -21,7 +21,7 @@ class MessageListCreateView(generics.ListCreateAPIView):
                 recipient__in=[user.id, recipient_id]
             )
         elif project_id:
-            qs = qs.filter(project_id=project_id)
+            qs = qs.filter(project_id=project_id, project__assignments__user=user)
         else:
             qs = qs.filter(recipient=user)
         return qs.order_by('created_at')

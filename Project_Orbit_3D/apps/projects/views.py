@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
-from django.db.models import Count
+from django.db.models import Count, Q
 
 from .models import Project, Assignment, Sprint, Label
 from .serializers import (
@@ -69,7 +69,9 @@ class AssignmentListCreateView(generics.ListCreateAPIView):
 class AssignmentDeleteView(generics.DestroyAPIView):
     serializer_class = AssignmentSerializer
     permission_classes = [permissions.IsAuthenticated, IsProjectManager]
-    queryset = Assignment.objects.all()
+
+    def get_queryset(self):
+        return Assignment.objects.filter(project_id=self.kwargs['project_pk'])
 
 
 class SprintListCreateView(generics.ListCreateAPIView):
@@ -77,16 +79,30 @@ class SprintListCreateView(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Sprint.objects.filter(project_id=self.kwargs['project_pk'])
+        return Sprint.objects.filter(
+            project_id=self.kwargs['project_pk'],
+            project__assignments__user=self.request.user,
+        ).distinct()
 
     def perform_create(self, serializer):
+        project_qs = Project.objects.filter(
+            id=self.kwargs['project_pk'], assignments__user=self.request.user
+        )
+        if not project_qs.exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied
         serializer.save(project_id=self.kwargs['project_pk'])
 
 
 class SprintDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = SprintSerializer
     permission_classes = [permissions.IsAuthenticated]
-    queryset = Sprint.objects.all()
+
+    def get_queryset(self):
+        return Sprint.objects.filter(
+            project_id=self.kwargs['project_pk'],
+            project__assignments__user=self.request.user,
+        ).distinct()
 
 
 @api_view(['GET'])
@@ -94,7 +110,9 @@ class SprintDetailView(generics.RetrieveUpdateDestroyAPIView):
 def project_stats(request, pk):
     """Returns project stats for dashboard cards."""
     try:
-        project = Project.objects.get(pk=pk)
+        project = Project.objects.get(
+            Q(assignments__user=request.user) | Q(owner=request.user), pk=pk
+        ) if not request.user.is_superuser else Project.objects.get(pk=pk)
     except Project.DoesNotExist:
         return Response(status=status.HTTP_404_NOT_FOUND)
 
