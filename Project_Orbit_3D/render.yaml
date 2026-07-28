@@ -9,7 +9,9 @@ services:
   - type: web
     name: projectforge-web
     runtime: docker
-    dockerfilePath: ./Dockerfile
+    rootDir: Project_Orbit_3D
+    dockerfilePath: ./Project_Orbit_3D/Dockerfile
+    dockerContext: ./Project_Orbit_3D
     plan: free
     region: oregon
     branch: main
