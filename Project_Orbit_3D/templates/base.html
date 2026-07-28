@@ -387,9 +387,15 @@
         </button>
 
         <!-- Logout -->
-        <a href="{% url 'logout' %}" class="topbar-btn p-2 rounded-xl transition-all hover:text-red-500" style="color:var(--nav-color)">
-          <i data-lucide="log-out" class="w-5 h-5"></i>
-        </a>
+        <form method="post" action="{% url 'logout' %}" class="inline-flex">
+          {% csrf_token %}
+          <button type="submit"
+                  class="topbar-btn p-2 rounded-xl transition-all hover:text-red-500"
+                  style="color:var(--nav-color)"
+                  title="Cerrar sesión">
+            <i data-lucide="log-out" class="w-5 h-5"></i>
+          </button>
+        </form>
       </div>
     </header>
 
