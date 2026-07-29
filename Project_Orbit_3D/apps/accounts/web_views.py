@@ -18,12 +18,32 @@ class LoginView(View):
     def post(self, request):
         username = request.POST.get('username')
         password = request.POST.get('password')
-        user = authenticate(request, username=username, password=password)
+
+        # DEBUG LOGIN
+        print("========== LOGIN DEBUG ==========")
+        print("USERNAME RECIBIDO:", username)
+        print("PASSWORD RECIBIDA:", password)
+        print("USER EXISTE:", User.objects.filter(username=username).exists())
+
+        user = authenticate(
+            request,
+            username=username,
+            password=password
+        )
+
+        print("AUTH RESULT:", user)
+        print("=================================")
+
         if user:
             login(request, user)
             return redirect(request.GET.get('next', '/'))
+
         messages.error(request, 'Credenciales inválidas.')
-        return render(request, self.template_name, {'username': username})
+        return render(
+            request,
+            self.template_name,
+            {'username': username}
+        )
 
 
 class RegisterView(View):
@@ -38,7 +58,12 @@ class RegisterView(View):
             user = serializer.save()
             login(request, user)
             return redirect('core:dashboard')
-        return render(request, self.template_name, {'errors': serializer.errors})
+
+        return render(
+            request,
+            self.template_name,
+            {'errors': serializer.errors}
+        )
 
 
 class ProfileView(LoginRequiredMixin, TemplateView):
@@ -53,4 +78,5 @@ class TeamView(LoginRequiredMixin, TemplateView):
         ctx['team_members'] = User.objects.filter(
             is_active=True
         ).prefetch_related('roles').order_by('first_name')
+
         return ctx
