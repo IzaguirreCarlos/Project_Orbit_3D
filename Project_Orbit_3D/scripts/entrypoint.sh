@@ -14,6 +14,8 @@ echo "────────────────────────�
 echo "[1/3] Applying database migrations..."
 python manage.py migrate --no-input
 
+python manage.py create_admin
+
 echo "[2/3] Collecting static files..."
 python manage.py collectstatic --no-input --clear
 
