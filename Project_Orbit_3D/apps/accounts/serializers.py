@@ -21,12 +21,12 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'first_name', 'last_name', 'full_name',
+            'id', 'username', 'email', 'first_name', 'last_name', 'full_name',
             'avatar', 'avatar_url', 'title', 'department', 'bio',
             'phone', 'joined_at', 'status', 'is_online', 'last_seen',
             'roles', 'primary_role', 'created_at',
         ]
-        read_only_fields = ['id', 'email', 'is_online', 'last_seen', 'created_at']
+        read_only_fields = ['id', 'username', 'email', 'is_online', 'last_seen', 'created_at']
 
     def get_primary_role(self, obj):
         role = obj.get_primary_role()
@@ -40,7 +40,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'email', 'first_name', 'last_name', 'password', 'password_confirm',
+            'username', 'email', 'first_name', 'last_name', 'password', 'password_confirm',
             'title', 'department',
         ]
 
@@ -72,6 +72,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
+        token['username'] = user.username
         token['email'] = user.email
         token['full_name'] = user.full_name
         token['primary_role'] = user.get_primary_role().name if user.get_primary_role() else None

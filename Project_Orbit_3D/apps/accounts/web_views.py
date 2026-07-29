@@ -16,14 +16,14 @@ class LoginView(View):
         return render(request, self.template_name)
 
     def post(self, request):
-        email = request.POST.get('email')
+        username = request.POST.get('username')
         password = request.POST.get('password')
-        user = authenticate(request, username=email, password=password)
+        user = authenticate(request, username=username, password=password)
         if user:
             login(request, user)
             return redirect(request.GET.get('next', '/'))
         messages.error(request, 'Credenciales inválidas.')
-        return render(request, self.template_name, {'email': email})
+        return render(request, self.template_name, {'username': username})
 
 
 class RegisterView(View):

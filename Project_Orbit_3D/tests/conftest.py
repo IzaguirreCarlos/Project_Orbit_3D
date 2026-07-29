@@ -19,11 +19,13 @@ def make_user(db):
 
     def _make(role_name=None, **kwargs):
         n = next(_counter)
+        username = kwargs.pop('username', f'user{n}')
         email = kwargs.pop('email', f'user{n}@example.com')
         password = kwargs.pop('password', 'RegressionTest!123')
         first_name = kwargs.pop('first_name', 'User')
         last_name = kwargs.pop('last_name', str(n))
         user = User.objects.create_user(
+            username=username,
             email=email,
             password=password,
             first_name=first_name,
