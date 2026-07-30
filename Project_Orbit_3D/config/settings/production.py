@@ -38,13 +38,25 @@ CORS_ALLOWED_ORIGINS = env.list(
 )
 CORS_ALLOW_ALL_ORIGINS = False
 
-# ─── Cache ────────────────────────────────────────────────────────
-# Usa Redis si REDIS_URL está definida con una URL real (no Docker).
-# Sin Redis configurado en Render → usa cache en memoria (sin timeout).
-_redis_url = os.environ.get('REDIS_URL', '')
-_redis_is_docker = _redis_url.startswith('redis://redis:')
+# ─── Cache & Channels ─────────────────────────────────────────────
+# Usa Redis solo si REDIS_URL apunta a un host externo real.
+# URLs locales/Docker → in-memory (sin conexión de red que pueda colgar).
+def _is_external_redis(url: str) -> bool:
+    """Devuelve True solo si la URL apunta a un Redis externo real."""
+    if not url:
+        return False
+    _local = ('localhost', '127.0.0.1', '0.0.0.0', '::1')
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(url).hostname or ''
+        return host not in _local and host != 'redis'
+    except Exception:
+        return False
 
-if _redis_url and not _redis_is_docker:
+
+_redis_url = os.environ.get('REDIS_URL', '')
+
+if _is_external_redis(_redis_url):
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.redis.RedisCache',
@@ -58,7 +70,7 @@ if _redis_url and not _redis_is_docker:
         }
     }
 else:
-    # Sin Redis → in-memory (funcional para instancia única en Render)
+    # Sin Redis externo → in-memory (funcional para instancia única en Render)
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
@@ -72,28 +84,34 @@ else:
     }
 
 # ─── Celery ───────────────────────────────────────────────────────
-# Sin broker Redis real → modo eager para no colgar en .delay()
+# Sin broker externo → modo eager para evitar intentos de conexión Redis
 _broker_url = os.environ.get('CELERY_BROKER_URL', '')
-_broker_is_docker = _broker_url.startswith('redis://redis:')
 
-if not _broker_url or _broker_is_docker:
+if not _is_external_redis(_broker_url):
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = False
 
 # ─── Logging estructurado ─────────────────────────────────────────
+# Formatter JSON con fallback a texto plano si pythonjsonlogger falla
+try:
+    import pythonjsonlogger.jsonlogger  # noqa
+    _log_formatter: dict = {
+        '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
+        'format': '%(asctime)s %(levelname)s %(name)s %(message)s',
+    }
+except ImportError:
+    _log_formatter = {'format': '[%(levelname)s] %(asctime)s %(name)s: %(message)s'}
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'json': {
-            '()': 'pythonjsonlogger.jsonlogger.JsonFormatter',
-            'format': '%(asctime)s %(levelname)s %(name)s %(message)s',
-        },
+        'production': _log_formatter,
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'formatter': 'json',
+            'formatter': 'production',
         },
     },
     'root': {

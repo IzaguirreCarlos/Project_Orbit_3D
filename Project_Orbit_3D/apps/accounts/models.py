@@ -112,10 +112,9 @@ class User(BaseModel, AbstractBaseUser, PermissionsMixin):
         if self.avatar:
             return self.avatar.url
         import base64
-        initials = (
-            f'{self.first_name[0]}{self.last_name[0]}'.upper()
-            if self.first_name else '?'
-        )
+        first = self.first_name[0].upper() if self.first_name else ''
+        last = self.last_name[0].upper() if self.last_name else ''
+        initials = (first + last) or '?'
         svg = (
             '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128">'
             '<rect width="128" height="128" fill="#6366f1" rx="64"/>'
