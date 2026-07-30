@@ -34,24 +34,35 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
+    """Registro simplificado: solo username y password."""
     password = serializers.CharField(write_only=True, min_length=8)
     password_confirm = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
-        fields = [
-            'username', 'email', 'first_name', 'last_name', 'password', 'password_confirm',
-            'title', 'department',
-        ]
+        fields = ['username', 'password', 'password_confirm']
+
+    def validate_username(self, value):
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError('Ese nombre de usuario ya está en uso.')
+        return value
 
     def validate(self, data):
         if data['password'] != data.pop('password_confirm'):
-            raise serializers.ValidationError({'password_confirm': 'Passwords do not match.'})
+            raise serializers.ValidationError({'password_confirm': 'Las contraseñas no coinciden.'})
         return data
 
     def create(self, validated_data):
-        password = validated_data.pop('password')
-        user = User(**validated_data)
+        username = validated_data['username']
+        password = validated_data['password']
+        # Email auto-generado para no romper el unique constraint del modelo
+        email = f"{username}@projectforge.local"
+        user = User(
+            username=username,
+            email=email,
+            first_name=username,
+            last_name='',
+        )
         user.set_password(password)
         user.save()
         return user

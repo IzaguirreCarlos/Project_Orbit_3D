@@ -62,7 +62,10 @@ class RegisterView(View):
         return render(
             request,
             self.template_name,
-            {'errors': serializer.errors}
+            {
+                'errors': serializer.errors,
+                'username': request.POST.get('username', ''),
+            }
         )
 
 
