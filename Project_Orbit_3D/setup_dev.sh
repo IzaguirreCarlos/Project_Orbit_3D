@@ -85,20 +85,8 @@ EOF
 echo -e "${GREEN}✓ Roles iniciales creados${NC}"
 
 # ─── 7. Create superuser ──────────────────────────────────────
-echo -e "${YELLOW}[7/8]${NC} Creando superusuario admin..."
-python manage.py shell --settings=config.settings.development << 'EOF'
-from apps.accounts.models import User
-if not User.objects.filter(email='admin@projectforge.dev').exists():
-    u = User.objects.create_superuser(
-        email='admin@projectforge.dev',
-        password='Admin1234!',
-        first_name='Admin',
-        last_name='ProjectForge',
-    )
-    print(f"✓ Superusuario creado: admin@projectforge.dev / Admin1234!")
-else:
-    print("✓ Superusuario ya existe: admin@projectforge.dev")
-EOF
+echo -e "${YELLOW}[7/8]${NC} Creando/restaurando superusuario admin..."
+python manage.py create_admin --settings=config.settings.development
 
 # ─── 8. Static files ──────────────────────────────────────────
 echo -e "${YELLOW}[8/8]${NC} Recopilando archivos estáticos..."
@@ -120,9 +108,10 @@ echo -e "${GREEN}${BOLD}║${NC}    App:    ${CYAN}http://localhost:8008${NC}   
 echo -e "${GREEN}${BOLD}║${NC}    Admin:  ${CYAN}http://localhost:8008/admin${NC}               ${GREEN}${BOLD}║${NC}"
 echo -e "${GREEN}${BOLD}║${NC}    Docs:   ${CYAN}http://localhost:8008/api/docs${NC}            ${GREEN}${BOLD}║${NC}"
 echo -e "${GREEN}${BOLD}║${NC}                                                      ${GREEN}${BOLD}║${NC}"
-echo -e "${GREEN}${BOLD}║${NC}  Credenciales:                                       ${GREEN}${BOLD}║${NC}"
-echo -e "${GREEN}${BOLD}║${NC}    Email:    ${CYAN}admin@projectforge.dev${NC}                  ${GREEN}${BOLD}║${NC}"
-echo -e "${GREEN}${BOLD}║${NC}    Password: ${CYAN}Admin1234!${NC}                              ${GREEN}${BOLD}║${NC}"
+echo -e "${GREEN}${BOLD}║${NC}  Credenciales Admin:                                 ${GREEN}${BOLD}║${NC}"
+echo -e "${GREEN}${BOLD}║${NC}    Username: ${CYAN}admin${NC}                                   ${GREEN}${BOLD}║${NC}"
+echo -e "${GREEN}${BOLD}║${NC}    Email:    ${CYAN}admin@projectforge.com${NC}                  ${GREEN}${BOLD}║${NC}"
+echo -e "${GREEN}${BOLD}║${NC}    Password: ${CYAN}Admin12345!${NC}                             ${GREEN}${BOLD}║${NC}"
 echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  ${YELLOW}Para Docker completo (con Redis + Celery):${NC}"
