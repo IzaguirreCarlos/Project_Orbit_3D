@@ -5,6 +5,9 @@
 # ═══════════════════════════════════════════════════════════════
 set -e
 
+# Garantizar que producción use el módulo de settings correcto
+export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-config.settings.production}"
+
 echo "──────────────────────────────────────────"
 echo "  ProjectForge 3D — Starting up"
 echo "  ENV: ${DJANGO_SETTINGS_MODULE}"
